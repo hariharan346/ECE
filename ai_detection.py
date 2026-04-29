@@ -14,10 +14,17 @@ class Config:
     BAUD_RATE = 9600
     
     # DETECTION PARAMETERS
-    THEFT_THRESHOLD = 1.5     # Higher threshold to ignore minor noise
-    SUSTAINED_THRESHOLD = 2.4 # Higher sustained threshold
-    AI_COOLDOWN_SECONDS = 60  # 1 minute cooldown to respect free tier limits
-    HISTORY_LIMIT = 10        # Buffer last 10 readings for AI context
+    THEFT_THRESHOLD = 1.5     
+    SUSTAINED_THRESHOLD = 2.4 
+    AI_COOLDOWN_SECONDS = 30  
+    HISTORY_LIMIT = 10        
+    
+    # APPLIANCE SIGNATURES (Load Fingerprinting)
+    SIGNATURES = {
+        "AC_UNIT": {"avg": 8.5, "spike_min": 5.0, "spike_max": 15.0},
+        "FRIDGE":  {"avg": 1.2, "spike_min": 0.5, "spike_max": 2.0},
+        "HEATER":  {"avg": 5.0, "spike_min": 0.1, "spike_max": 0.5}
+    }
     
     # FILE PATHS
     LOG_FILE = "theft_history.csv"
@@ -46,6 +53,15 @@ class PowerTheftMonitor:
         self.last_ai_call_time = 0
         self.data_history = []  # Sliding window of readings
 
+    def edge_ai_inference(self, current, spike):
+        """Simulates Local TinyML Inference for Load Fingerprinting."""
+        for name, sig in Config.SIGNATURES.items():
+            if sig['spike_min'] <= spike <= sig['spike_max']:
+                return f"MATCHED_SIGNATURE: {name}"
+        if current > 10.0 and spike > 5.0:
+            return "UNKNOWN_HIGH_POWER_SIGNATURE (POTENTIAL THEFT)"
+        return "GENERIC_LOAD"
+
     def connect_serial(self):
         """Attempts to connect to the Arduino with automatic retries."""
         while True:
@@ -59,8 +75,8 @@ class PowerTheftMonitor:
                 print(f"❌ Connection Failed: {e}. Retrying in 5s...")
                 time.sleep(5)
 
-    def process_ai_verification(self, current, spike, history):
-        """Calls Gemini for pattern analysis using a sliding window of data."""
+    def process_ai_verification(self, current, spike, history, edge_verdict):
+        """Calls Gemini for expert analysis with Edge AI context."""
         current_time = time.time()
         if (current_time - self.last_ai_call_time) < Config.AI_COOLDOWN_SECONDS:
             return "SKIPPED (COOLDOWN)"
@@ -72,51 +88,27 @@ class PowerTheftMonitor:
             
             system_instruction = (
                 "You are a senior electrical engineer and AI system evaluator. "
-                "You are validating a prototype system called 'Adaptive Power Theft Detection Node'. "
-                "The system receives electrical current and spike values from an edge device (Arduino). "
-                "Your job is to analyze the data stream and evaluate the system behavior across all scenarios. "
-                "You must detect anomalies and also verify whether the system is correctly handling real-world cases.\n\n"
-                "Baseline current is approximately 1.5A.\n\n"
-                "You must classify each input into one of:\n"
-                "1. NORMAL → small variation around baseline\n"
-                "2. SUSPICIOUS → irregular fluctuation or unstable behavior\n"
-                "3. THEFT → either sudden spike OR sustained high current above baseline\n\n"
-                "IMPORTANT:\n"
-                "- Detect transient anomalies (sudden spikes)\n"
-                "- Detect steady-state anomalies (continuous high current after tapping)\n"
-                "- Ignore temporary noise if system returns to normal\n"
-                "- Evaluate patterns, not just single values\n\n"
-                "Also act as a tester:\n"
-                "- Check if the system is behaving correctly\n"
-                "- Mention which scenario is being triggered\n"
-                "- Give short technical reasoning"
+                "You are validating an 'Adaptive Power Theft Detection Node' with EDGE AI capabilities.\n\n"
+                "Your task is LOAD FINGERPRINTING: Distinguish between authorized appliance signatures and illegal theft.\n\n"
+                "Baseline current: 1.5A.\n"
+                "Rules:\n"
+                "- NORMAL: Matches known appliance signatures (AC, Fridge, Heater).\n"
+                "- SUSPICIOUS: Unknown signatures or irregular fluctuations.\n"
+                "- THEFT: High current with NO matching appliance signature or sudden massive spikes.\n\n"
+                "Output format strictly:\n"
+                "SCENARIO: <name>\n"
+                "STATUS: <NORMAL / SUSPICIOUS / THEFT>\n"
+                "REASON: <short explanation>\n"
+                "SYSTEM_EVAL: <correct / needs improvement>"
             )
 
             history_str = "\n".join([f"[{d['time']}] Current: {d['current']:.2f}A, Spike: {d['spike']:.2f}A" for d in history])
             
             user_prompt = (
+                f"Edge AI Local Verdict: {edge_verdict}\n"
                 f"Recent Data Stream (Sliding Window):\n{history_str}\n\n"
                 f"Latest Reading -> Current: {current:.2f}A, Spike: {spike:.2f}A\n\n"
-                "Test Scenarios to validate:\n"
-                "1. Normal load → ~1.5A stable\n"
-                "2. Sudden spike → quick jump (e.g., 1.5 → 3.0A)\n"
-                "3. Fluctuation → irregular up/down\n"
-                "4. Steady theft → current remains high (>2.5A) for multiple readings\n"
-                "5. Noise → temporary spike then return to normal\n\n"
-                "Special Instructions for Pattern Analysis:\n"
-                "- If current jumped and stayed high, it is likely THEFT (Steady-State).\n"
-                "- If current is high but very stable from the start, it might be a HIGH POWER DEVICE (NORMAL/SUSPICIOUS).\n"
-                "- If spikes are frequent and irregular, it is SUSPICIOUS.\n\n"
-                "Tasks:\n"
-                "- Identify which scenario this data belongs to\n"
-                "- Classify: NORMAL / SUSPICIOUS / THEFT\n"
-                "- Give 1-line technical explanation\n"
-                "- Say if system detection is correct or needs improvement\n\n"
-                "Strict Output Format:\n"
-                "SCENARIO: <name>\n"
-                "STATUS: <NORMAL / SUSPICIOUS / THEFT>\n"
-                "REASON: <short explanation>\n"
-                "SYSTEM_EVAL: <correct / needs improvement>"
+                "Identify if this signature matches a legitimate appliance or indicates an illegal tap."
             )
 
             payload = {
@@ -210,13 +202,17 @@ class PowerTheftMonitor:
                 if is_anomaly:
                     trigger_type = "SPIKE" if spike > Config.THEFT_THRESHOLD else "SUSTAINED"
                     
-                    # Run AI Audit with full history context
-                    ai_verdict = self.process_ai_verification(current, spike, self.data_history)
+                    # 1. NEW: Perform Local Edge AI Inference (TinyML Simulation)
+                    edge_verdict = self.edge_ai_inference(current, spike)
+                    
+                    # 2. Perform Cloud AI Audit with Edge context
+                    ai_verdict = self.process_ai_verification(current, spike, self.data_history, edge_verdict)
                     
                     # Only report if AI actually performed an audit (not skipped due to cooldown)
                     if ai_verdict != "SKIPPED (COOLDOWN)":
                         print(f"\n[!] ANOMALY ({trigger_type}): {current:.2f}A detected at {datetime.now().strftime('%H:%M:%S')}")
-                        print(f"🤖 AI Audit Result:\n{ai_verdict}")
+                        print(f"🧠 Edge AI Local Verdict: {edge_verdict}")
+                        print(f"🤖 Cloud AI Audit Result:\n{ai_verdict}")
                         
                         # Log to CSV
                         self.logger.log_event(f"THEFT_ALERT_{trigger_type}", current, spike, ai_verdict)

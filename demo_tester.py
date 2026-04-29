@@ -60,9 +60,13 @@ class DemoSimulator(PowerTheftMonitor):
                 if (curr_time - self.last_ai_call_time) < Config.AI_COOLDOWN_SECONDS:
                     print(f"  AI Audit Result: SKIPPED (Cooldown: {int(Config.AI_COOLDOWN_SECONDS - (curr_time-self.last_ai_call_time))}s left)\n")
                 else:
-                    print(f"  🧠 Calling Gemini AI for Expert Audit...")
-                    # Perform real AI Audit
-                    verdict = self.process_ai_verification(current, spike, self.data_history)
+                    # 1. Perform Local Edge AI Inference
+                    edge_verdict = self.edge_ai_inference(current, spike)
+                    print(f"  🧠 Edge AI Local Verdict: {edge_verdict}")
+                    print(f"  ☁️ Calling Gemini AI for Expert Audit...")
+                    
+                    # 2. Perform Cloud AI Audit with Edge context
+                    verdict = self.process_ai_verification(current, spike, self.data_history, edge_verdict)
                     print(f"  🤖 AI Verdict:\n{verdict}\n")
                     self.last_ai_call_time = curr_time
             
@@ -82,21 +86,28 @@ def main():
         print("3. Steady Theft (Sustained Load)")
         print("4. Irregular Fluctuation (Suspicious)")
         print("5. Noise (Temporary Spike)")
+        print("6. Legitimate Load (AC Unit - Fingerprinting)")
+        print("7. Unauthorized High Power Device")
         print("Q. Quit")
         
-        choice = input("\nEnter choice (1-5 or Q): ").upper()
+        choice = input("\nEnter choice (1-7 or Q): ").upper()
         
         if choice == '1':
             sim.run_scenario("NORMAL LOAD", [1.5, 1.52, 1.48, 1.51, 1.50, 1.49])
         elif choice == '2':
             sim.run_scenario("SUDDEN SPIKE", [1.5, 1.5, 4.2, 4.15, 4.1])
         elif choice == '3':
-            # Needs 5 high readings to trigger SUSTAINED
             sim.run_scenario("STEADY THEFT", [1.5, 3.2, 3.25, 3.22, 3.28, 3.24, 3.21])
         elif choice == '4':
             sim.run_scenario("FLUCTUATION", [1.5, 2.1, 1.6, 2.2, 1.7, 2.3])
         elif choice == '5':
             sim.run_scenario("NOISE", [1.5, 3.0, 1.5, 1.52, 1.5])
+        elif choice == '6':
+            # Simulates an AC starting (huge spike but matches signature)
+            sim.run_scenario("AC UNIT START", [1.5, 1.5, 12.0, 8.5, 8.5, 8.5])
+        elif choice == '7':
+            # Simulates a device that doesn't match any known signature
+            sim.run_scenario("UNAUTHORIZED DEVICE", [1.5, 1.5, 20.0, 19.5, 19.0])
         elif choice == 'Q':
             break
         else:

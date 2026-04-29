@@ -6,10 +6,14 @@ from datetime import datetime
 from openai import OpenAI
 import requests
 import json
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- 1. CONFIGURATION ---
 class Config:
-    OPENAI_API_KEY = "AIzaSyACtS1g2hcyf49BVEmrDDi9X-bO5AeOEnE"
+    OPENAI_API_KEY = os.getenv("GEMINI_API_KEY")
     SERIAL_PORT = 'COM6'
     BAUD_RATE = 9600
     

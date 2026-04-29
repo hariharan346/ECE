@@ -1,0 +1,4 @@
+.env
+__pycache__/
+*.pyc
+theft_history.csv

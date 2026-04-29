@@ -1,0 +1,7 @@
+Timestamp,Type,Current,Spike,AI_Result
+2026-04-29 20:27:26,THEFT_ALERT_SPIKE,3.11,1.68,ERROR: Rate Limit Hit (429). Cooldown increased to 60s.
+2026-04-29 20:28:41,THEFT_ALERT_SUSTAINED,38.51,0.09,ERROR: Rate Limit Hit (429). Cooldown increased to 60s.
+2026-04-29 20:29:26,THEFT_ALERT_SUSTAINED,70.09,0.02,ERROR: Rate Limit Hit (429). Cooldown increased to 60s.
+2026-04-29 20:30:26,THEFT_ALERT_SUSTAINED,96.95,0.09,ERROR: Rate Limit Hit (429). Cooldown increased to 60s.
+2026-04-29 20:31:26,THEFT_ALERT_SUSTAINED,141.95,0.08,ERROR: Rate Limit Hit (429). Cooldown increased to 60s.
+2026-04-29 20:32:26,THEFT_ALERT_SUSTAINED,187.72,0.07,ERROR: Rate Limit Hit (429). Cooldown increased to 60s.

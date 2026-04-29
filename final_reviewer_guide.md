@@ -34,6 +34,11 @@ Explain this to show how the data flows from the sensor to the verdict:
     2.  Even after the spike value drops to 0.04, the system detects **SUSTAINED** current.
 *   **Explanation**: "This shows our system's memory. Even if the thief stops making changes, the sustained high current triggers a second audit."
 
+### Scenario 4: Irregular Fluctuation (Suspicious)
+*   **Data**: `Current: 2.10A | Spike: 0.60`
+*   **Verdict**: `STATUS: SUSPICIOUS`
+*   **Explanation**: "The current is fluctuating above the 1.5A baseline but hasn't hit the 2.4A sustained theft threshold. The system flags this as **SUSPICIOUS** rather than theft, demonstrating its ability to handle 'gray area' behaviors."
+
 ### Scenario 5: Grid Noise (Temporary Spike)
 *   **Data**: `Current: 3.00A | Spike: 1.50` but returns to `1.50A`.
 *   **Result**: `Status: OK`
